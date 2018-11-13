@@ -10,24 +10,32 @@
  */
 class UpdateCloudAssetsTask extends BuildTask
 {
-	protected $title = 'Cloud Assets: Update All Files';
-	protected $description = 'Simply calls updateCloudStatus on every file in the db. Allows you to get a new server or development environment synced up easily.';
+    protected $title = 'Cloud Assets: Update All Files';
+    protected $description = 'Simply calls updateCloudStatus on every file in the db. Allows you to get a new server or development environment synced up easily.';
 
 
-	public function run($request) {
-		$buckets = Config::inst()->get('CloudAssets', 'map');
+    public function run($request) {
+        $buckets = Config::inst()->get('CloudAssets', 'map');
 
-		foreach ($buckets as $basePath => $cfg) {
-			echo "processing $basePath...\n";
-			$files = File::get()->filter('Filename:StartsWith', ltrim($basePath, '/'));
-			foreach ($files as $f) {
-				echo " - {$f->Filename}: {$f->CloudStatus} - placeholder={$f->containsPlaceholder()}\n";
-				$f->updateCloudStatus();
-				$f->createLocalIfNeeded();
-			}
-		}
+        foreach ($buckets as $basePath => $cfg) {
+            echo "processing $basePath...\n";
+            $files = File::get()->filter('Filename:StartsWith', ltrim($basePath, '/'));
 
-		echo "done\n\n";
-	}
+            foreach ($files as $f) {
+                echo " - {$f->Filename}: {$f->CloudStatus} - placeholder={$f->containsPlaceholder()}\n";
+                $extension = $f->getExtension();
+                $allowed = array_map('strtolower', Config::inst()->get('File','allowed_extensions'));
+                if(!in_array(strtolower($extension), $allowed)) {
+                    echo " - not allowed extension".PHP_EOL;
+                    continue;
+                }
+
+                $f->updateCloudStatus();
+                $f->createLocalIfNeeded();
+            }
+        }
+
+        echo "done\n\n";
+    }
 
 }

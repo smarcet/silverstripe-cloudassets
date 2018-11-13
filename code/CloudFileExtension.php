@@ -19,7 +19,6 @@ class CloudFileExtension extends DataExtension
 
     private $inUpdate = false;
 
-
     /**
      * Handle renames
      */
@@ -52,7 +51,6 @@ class CloudFileExtension extends DataExtension
         }
     }
 
-
     /**
      * Update cloud status any time the file is written
      */
@@ -60,7 +58,6 @@ class CloudFileExtension extends DataExtension
     {
         $this->updateCloudStatus();
     }
-
 
     /**
      * Delete the file from the cloud (if it was ever there)
@@ -86,7 +83,6 @@ class CloudFileExtension extends DataExtension
         }
     }
 
-
     /**
      * Performs two functions:
      * 1. Wraps this object in CloudFile (etc) by changing the classname if it should be and is not
@@ -96,80 +92,87 @@ class CloudFileExtension extends DataExtension
      */
     public function updateCloudStatus()
     {
-        if ($this->inUpdate) {
-            return;
-        }
-        $this->inUpdate = true;
-        $cloud  = CloudAssets::inst();
-
-        // does this file fall under a cloud bucket?
-        $bucket = $cloud->map($this->owner->getFilename());
-        if ($bucket) {
-            // does this file need to be wrapped?
-            $wrapClass = $cloud->getWrapperClass($this->owner->ClassName);
-            if (!empty($wrapClass)) {
-                if ($wrapClass != $this->owner->ClassName) {
-                    $cloud->getLogger()->debug("CloudAssets: wrapping {$this->owner->ClassName} to $wrapClass. ID={$this->owner->ID}");
-                    $this->owner->ClassName = $wrapClass;
-                    $this->owner->write();
-                    $wrapped = DataObject::get($wrapClass)->byID($this->owner->ID);
-                    if ($wrapped->hasMethod('onAfterCloudWrap')) {
-                        $wrapped->onAfterCloudWrap();
-                    }
-                } else {
-                    $wrapped = $this->owner;
-                }
-
-                // does this file need to be uploaded to storage?
-                if ($wrapped->canBeInCloud() && $wrapped->isCloudPutNeeded() && !Config::inst()->get('CloudAssets', 'uploads_disabled')) {
-                    try {
-                        if ($wrapped->hasMethod('onBeforeCloudPut')) {
-                            $wrapped->onBeforeCloudPut();
-                        }
-                        $cloud->getLogger()->debug("CloudAssets: uploading file ".$wrapped->getFilename());
-                        $bucket->put($wrapped);
-
-                        $wrapped->setCloudMeta('LastPut', time());
-                        $wrapped->CloudStatus = 'Live';
-                        $wrapped->CloudSize   = filesize($this->owner->getFullPath());
-                        $wrapped->write();
-
-                        $wrapped->convertToPlaceholder();
-                        if ($wrapped->hasMethod('onAfterCloudPut')) {
-                            $wrapped->onAfterCloudPut();
-                        }
-                    } catch (Exception $e) {
-                        $wrapped->CloudStatus = 'Error';
-                        $wrapped->write();
-                        $cloud->getLogger()->error("CloudAssets: Failed bucket upload: " . $e->getMessage() . " for " . $wrapped->getFullPath());
-                        // Fail silently for now. This will cause the local copy to be served.
-                    }
-                } elseif ($wrapped->CloudStatus !== 'Live' && $wrapped->containsPlaceholder()) {
-                    // If this is a duplicate file, update the status
-                    // This shouldn't happen ever and won't happen often but when it does this will be helpful
-                    $dup = File::get()->filter(array(
-                        'Filename'      => $wrapped->Filename,
-                        'CloudStatus'   => 'Live',
-                    ))->first();
-
-                    if ($dup && $dup->exists()) {
-                        $cloud->getLogger()->warn("CloudAssets: fixing status for duplicate file: {$wrapped->ID} and {$dup->ID}");
-                        $wrapped->CloudStatus   = $dup->CloudStatus;
-                        $wrapped->CloudSize     = $dup->CloudSize;
-                        $wrapped->CloudMetaJson = $dup->CloudMetaJson;
-                        $wrapped->write();
-                    }
-                }
-
-                $this->inUpdate = false;
-                return $wrapped;
+        try {
+            if ($this->inUpdate) {
+                return;
             }
+            $this->inUpdate = true;
+            $cloud = CloudAssets::inst();
+
+            // does this file fall under a cloud bucket?
+            $bucket = $cloud->map($this->owner->getFilename());
+            if ($bucket) {
+                // does this file need to be wrapped?
+                $wrapClass = $cloud->getWrapperClass($this->owner->ClassName);
+                if (!empty($wrapClass)) {
+                    if ($wrapClass != $this->owner->ClassName) {
+                        $cloud->getLogger()->debug("CloudAssets: wrapping {$this->owner->ClassName} to $wrapClass. ID={$this->owner->ID}");
+                        $this->owner->ClassName = $wrapClass;
+                        $this->owner->write();
+                        $wrapped = DataObject::get($wrapClass)->byID($this->owner->ID);
+                        if ($wrapped->hasMethod('onAfterCloudWrap')) {
+                            $wrapped->onAfterCloudWrap();
+                        }
+                    } else {
+                        $wrapped = $this->owner;
+                    }
+
+                    // does this file need to be uploaded to storage?
+                    if ($wrapped->canBeInCloud() && $wrapped->isCloudPutNeeded() && !Config::inst()->get('CloudAssets', 'uploads_disabled')) {
+                        try {
+                            if ($wrapped->hasMethod('onBeforeCloudPut')) {
+                                $wrapped->onBeforeCloudPut();
+                            }
+                            $cloud->getLogger()->debug("CloudAssets: uploading file " . $wrapped->getFilename());
+                            $bucket->put($wrapped);
+
+                            $wrapped->setCloudMeta('LastPut', time());
+                            $wrapped->CloudStatus = 'Live';
+                            $wrapped->CloudSize = filesize($this->owner->getFullPath());
+                            $wrapped->write();
+
+                            $wrapped->convertToPlaceholder();
+                            if ($wrapped->hasMethod('onAfterCloudPut')) {
+                                $wrapped->onAfterCloudPut();
+                            }
+                        } catch (Exception $e) {
+                            $wrapped->CloudStatus = 'Error';
+                            $wrapped->write();
+                            $cloud->getLogger()->error("CloudAssets: Failed bucket upload: " . $e->getMessage() . " for " . $wrapped->getFullPath());
+                            // Fail silently for now. This will cause the local copy to be served.
+                        }
+                    } elseif ($wrapped->CloudStatus !== 'Live' && $wrapped->containsPlaceholder()) {
+                        // If this is a duplicate file, update the status
+                        // This shouldn't happen ever and won't happen often but when it does this will be helpful
+                        $dup = File::get()->filter(array(
+                            'Filename' => $wrapped->Filename,
+                            'CloudStatus' => 'Live',
+                        ))->first();
+
+                        if ($dup && $dup->exists()) {
+                            $cloud->getLogger()->warn("CloudAssets: fixing status for duplicate file: {$wrapped->ID} and {$dup->ID}");
+                            $wrapped->CloudStatus = $dup->CloudStatus;
+                            $wrapped->CloudSize = $dup->CloudSize;
+                            $wrapped->CloudMetaJson = $dup->CloudMetaJson;
+                            $wrapped->write();
+                        }
+                    }
+
+                    $this->inUpdate = false;
+                    return $wrapped;
+                }
+            }
+
+            $this->inUpdate = false;
+
         }
-
-        $this->inUpdate = false;
-        return $this->owner;
+        catch (Exception $ex){
+            SS_Log::log($ex->getMessage(), SS_Log::WARN);
+        }
+        finally{
+            return $this->owner;
+        }
     }
-
 
     /**
      * @return bool
@@ -184,7 +187,6 @@ class CloudFileExtension extends DataExtension
         }
         return true;
     }
-
 
     /**
      * @return bool
@@ -236,7 +238,6 @@ class CloudFileExtension extends DataExtension
         return $bucket ? $bucket->getLinkFor($this->owner, $linkType) : '';
     }
 
-
     /**
      * @param string $key [optional] - if not present returns the whole array
      * @return array
@@ -274,6 +275,11 @@ class CloudFileExtension extends DataExtension
         return $this->owner;
     }
 
+    public function updateURL(&$url){
+        $this->createLocalIfNeeded();
+        if( $this->owner->CloudStatus == 'Live')
+            $url = $this->getCloudURL();
+    }
 
     /**
      * If this file is stored in the cloud, downloads the cloud
