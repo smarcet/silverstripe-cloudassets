@@ -27,6 +27,8 @@ class CloudAssetsFullCheckTask extends BuildTask
 	 * @param $request
 	 */
 	public function run($request) {
+        set_time_limit(0);
+
 		$buckets   = Config::inst()->get('CloudAssets', 'map');
 		$start     = (int)$request->requestVar('start');
 		$limit     = (int)$request->requestVar('limit');

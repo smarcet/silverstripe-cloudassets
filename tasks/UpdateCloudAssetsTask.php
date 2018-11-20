@@ -15,14 +15,17 @@ class UpdateCloudAssetsTask extends BuildTask
 
 
     public function run($request) {
+        set_time_limit(0);
+
         $buckets = Config::inst()->get('CloudAssets', 'map');
 
         foreach ($buckets as $basePath => $cfg) {
             echo "processing $basePath...\n";
             $files = File::get()->filter('Filename:StartsWith', ltrim($basePath, '/'));
-
+            echo sprintf("total file count %s", $files->count()).PHP_EOL;
+            $i = 1;
             foreach ($files as $f) {
-                echo " - {$f->Filename}: {$f->CloudStatus} - placeholder={$f->containsPlaceholder()}\n";
+                echo sprintf("%s) filename %s - cloudstatus %s - placeholder %s",$i, $f->Filename, $f->CloudStatus, $f->containsPlaceholder() ).PHP_EOL;
                 $extension = $f->getExtension();
                 $allowed = array_map('strtolower', Config::inst()->get('File','allowed_extensions'));
                 if(!in_array(strtolower($extension), $allowed)) {
@@ -32,6 +35,7 @@ class UpdateCloudAssetsTask extends BuildTask
 
                 $f->updateCloudStatus();
                 $f->createLocalIfNeeded();
+                $i++;
             }
         }
 

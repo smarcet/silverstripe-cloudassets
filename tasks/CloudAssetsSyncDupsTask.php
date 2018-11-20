@@ -23,6 +23,8 @@ class CloudAssetsSyncDupsTask extends BuildTask
 	protected $description = "If there are any duplicate file records (2 records pointing to the same file) this task will sync the cloud state between them. If any of them has a live status, all of them will.";
 
 	public function run($request) {
+        set_time_limit(0);
+
 		$results = DB::query(<<<SQL
 			SELECT "Filename", count("ID") as "Num",
 				group_concat("ID" order by "ID" separator ',') as "IDs",

@@ -8,3 +8,5 @@ File:
 Injector:
   Upload:
     class: CloudAwareUpload
+  UploadField:
+    class: CloudAwareUploadField
