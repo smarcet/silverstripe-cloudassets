@@ -218,4 +218,16 @@ abstract class CloudBucket extends SS_Object
     {
         return !empty($this->config[self::LOCAL_COPY]);
     }
+
+    /**
+     * @param File|string $f
+     * @return int
+     */
+    abstract public function getFileSize($f);
+
+    /**
+     * @param File|string $f
+     * @return \GuzzleHttp\Psr7\Uri|string
+     */
+    abstract public function getPublicURLFor($f);
 }
