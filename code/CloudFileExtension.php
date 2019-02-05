@@ -1,4 +1,5 @@
 <?php
+
 /**
  * This is added to all File objects for shared functionality.
  *
@@ -8,11 +9,15 @@
  */
 class CloudFileExtension extends DataExtension
 {
-    private static $db = array(
+    const LiveStatus  = 'Live';
+    const LocalStatus = 'Local';
+    const ErrorStatus = 'Error';
+
+    private static $db = [
         'CloudStatus'   => "Enum('Local,Live,Error','Local')",
         'CloudSize'     => 'Int',
         'CloudMetaJson' => 'Text',      // saves any bucket or file-type specific information
-    );
+    ];
 
     /** @var File|CloudFileExtension */
     protected $owner;
@@ -128,7 +133,7 @@ class CloudFileExtension extends DataExtension
                             $bucket->put($wrapped);
 
                             $wrapped->setCloudMeta('LastPut', time());
-                            $wrapped->CloudStatus = 'Live';
+                            $wrapped->CloudStatus = self::LiveStatus;
                             $wrapped->CloudSize = filesize($this->owner->getFullPath());
                             $wrapped->write();
 
@@ -137,25 +142,23 @@ class CloudFileExtension extends DataExtension
                                 $wrapped->onAfterCloudPut();
                             }
                         } catch (Exception $e) {
-                            $wrapped->CloudStatus = 'Error';
+                            $wrapped->CloudStatus = self::ErrorStatus;
                             $wrapped->write();
                             $cloud->getLogger()->error("CloudAssets: Failed bucket upload: " . $e->getMessage() . " for " . $wrapped->getFullPath());
                             // Fail silently for now. This will cause the local copy to be served.
                         }
-                    }
-                    elseif(!is_null($url) && $wrapped->CloudStatus !== 'Live' ){
+                    } elseif (!is_null($url) && $wrapped->CloudStatus !== self::LiveStatus) {
                         $wrapped->setCloudMeta('LastPut', time());
-                        $wrapped->CloudStatus = 'Live';
-                        $wrapped->CloudSize = $bucket->getFileSize($this->owner->getFilename());
+                        $wrapped->CloudStatus = self::LiveStatus;
+                        $wrapped->CloudSize   = $bucket->getFileSize($this->owner->getFilename());
                         $wrapped->write();
-                    }
-                    elseif ($wrapped->CloudStatus !== 'Live' && $wrapped->containsPlaceholder()) {
+                    } elseif ($wrapped->CloudStatus !== self::LiveStatus && $wrapped->containsPlaceholder()) {
                         // If this is a duplicate file, update the status
                         // This shouldn't happen ever and won't happen often but when it does this will be helpful
-                        $dup = File::get()->filter(array(
+                        $dup = File::get()->filter([
                             'Filename' => $wrapped->Filename,
-                            'CloudStatus' => 'Live',
-                        ))->first();
+                            'CloudStatus' => self::LiveStatus,
+                        ])->first();
 
                         if ($dup && $dup->exists()) {
                             $cloud->getLogger()->warn("CloudAssets: fixing status for duplicate file: {$wrapped->ID} and {$dup->ID}");
@@ -173,11 +176,9 @@ class CloudFileExtension extends DataExtension
 
             $this->inUpdate = false;
 
-        }
-        catch (Exception $ex){
+        } catch (Exception $ex) {
             SS_Log::log($ex->getMessage(), SS_Log::WARN);
-        }
-        finally{
+        } finally {
             return $this->owner;
         }
     }
@@ -267,7 +268,7 @@ class CloudFileExtension extends DataExtension
 
     /**
      * @param string|array $key - passing an array as the first argument replaces the meta data entirely
-     * @param mixed        $val
+     * @param mixed $val
      * @return File - chainable
      */
     public function setCloudMeta($key, $val = null)
@@ -283,9 +284,10 @@ class CloudFileExtension extends DataExtension
         return $this->owner;
     }
 
-    public function updateURL(&$url){
+    public function updateURL(&$url)
+    {
         $this->createLocalIfNeeded();
-        if( $this->owner->CloudStatus == 'Live')
+        if ($this->owner->CloudStatus == self::LiveStatus)
             $url = $this->getCloudURL();
     }
 
@@ -295,22 +297,25 @@ class CloudFileExtension extends DataExtension
      */
     public function downloadFromCloud()
     {
-        if ($this->owner->CloudStatus === 'Live') {
-            $bucket   = $this->owner->getCloudBucket();
-            if ($bucket) {
-                $contents = $bucket->getContents($this->owner);
-                $path     = $this->owner->getFullPath();
-                Filesystem::makeFolder(dirname($path));
-                CloudAssets::inst()->getLogger()->debug("CloudAssets: downloading $path from cloud (size=".strlen($contents).")");
-                // if there was an error and we overwrote the local file with empty or null, it could delete the remote
-                // file as well. Better to err on the side of not writing locally when we should than that.
-                if (!empty($contents)) {
-                    file_put_contents($path, $contents);
-                }
+        if ($this->owner->CloudStatus !== self::LiveStatus)
+            return;
+        $bucket = $this->owner->getCloudBucket();
+        if ($bucket) {
+            $contents = $bucket->getContents($this->owner);
+            $path = $this->owner->getFullPath();
+            Filesystem::makeFolder(dirname($path));
+            CloudAssets::inst()->getLogger()->debug("CloudAssets: downloading $path from cloud (size=" . strlen($contents) . ")");
+            // if there was an error and we overwrote the local file with empty or null, it could delete the remote
+            // file as well. Better to err on the side of not writing locally when we should than that.
+            if (!empty($contents)) {
+                file_put_contents($path, $contents);
+
+                $this->owner->setCloudMeta('LastPut', time());
+                $this->owner->write();
             }
+
         }
     }
-
 
     /**
      * If the file is present in the database and the cloud but not
@@ -319,23 +324,24 @@ class CloudFileExtension extends DataExtension
      */
     public function createLocalIfNeeded()
     {
-        if ($this->owner->CloudStatus === 'Live') {
-            $bucket = $this->getCloudBucket();
-            if ($bucket && $bucket->isLocalCopyEnabled()) {
-                if (!file_exists($this->owner->getFullPath()) || $this->containsPlaceholder()) {
-                    try {
-                        $this->downloadFromCloud();
-                    } catch (Exception $e) {
-                        // I'm not sure what the correct behaviour is here
-                        // Pretty sure it'd be better to have a broken image
-                        // link than a 500 error though.
-                        CloudAssets::inst()->getLogger()->error("CloudAssets: Failed bucket download: " . $e->getMessage() . " for " . $this->owner->getFullPath());
-                    }
+        if ($this->owner->CloudStatus !== self::LiveStatus)
+            return;
+
+        $bucket = $this->getCloudBucket();
+        if ($bucket && $bucket->isLocalCopyEnabled()) {
+            if (!file_exists($this->owner->getFullPath()) || $this->containsPlaceholder()) {
+                try {
+                    $this->downloadFromCloud();
+                } catch (Exception $e) {
+                    // I'm not sure what the correct behaviour is here
+                    // Pretty sure it'd be better to have a broken image
+                    // link than a 500 error though.
+                    CloudAssets::inst()->getLogger()->error("CloudAssets: Failed bucket download: " . $e->getMessage() . " for " . $this->owner->getFullPath());
                 }
-            } else {
-                if (!file_exists($this->owner->getFullPath())) {
-                    $this->convertToPlaceholder();
-                }
+            }
+        } else {
+            if (!file_exists($this->owner->getFullPath())) {
+                $this->convertToPlaceholder();
             }
         }
     }
