@@ -121,8 +121,6 @@ class CloudFileExtension extends DataExtension
                     } else {
                         $wrapped = $this->owner;
                     }
-                    // gets urls if exists alredy on container
-                    $url = $bucket->getPublicURLFor($this->owner->getFilename());
                     // does this file need to be uploaded to storage?
                     if ($wrapped->canBeInCloud() && $wrapped->isCloudPutNeeded() && !Config::inst()->get('CloudAssets', 'uploads_disabled')) {
                         try {
@@ -147,12 +145,8 @@ class CloudFileExtension extends DataExtension
                             $cloud->getLogger()->error("CloudAssets: Failed bucket upload: " . $e->getMessage() . " for " . $wrapped->getFullPath());
                             // Fail silently for now. This will cause the local copy to be served.
                         }
-                    } elseif (!is_null($url) && $wrapped->CloudStatus !== self::LiveStatus) {
-                        $wrapped->setCloudMeta('LastPut', time());
-                        $wrapped->CloudStatus = self::LiveStatus;
-                        $wrapped->CloudSize   = $bucket->getFileSize($this->owner->getFilename());
-                        $wrapped->write();
-                    } elseif ($wrapped->CloudStatus !== self::LiveStatus && $wrapped->containsPlaceholder()) {
+                    }
+                    elseif ($wrapped->CloudStatus !== self::LiveStatus && $wrapped->containsPlaceholder()) {
                         // If this is a duplicate file, update the status
                         // This shouldn't happen ever and won't happen often but when it does this will be helpful
                         $dup = File::get()->filter([
