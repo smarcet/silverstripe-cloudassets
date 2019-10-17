@@ -21,31 +21,31 @@ class CloudImage extends Image implements CloudAssetInterface
     public function Link()
     {
         $this->createLocalIfNeeded();
-        return $this->CloudStatus == 'Live' ? $this->getCloudURL() : parent::Link();
+        return $this->CloudStatus == CloudFileExtension::LiveStatus ? $this->getCloudURL() : parent::Link();
     }
 
     public function RelativeLink()
     {
         $this->createLocalIfNeeded();
-        return $this->CloudStatus == 'Live' ? $this->getCloudURL() : parent::RelativeLink();
+        return $this->CloudStatus == CloudFileExtension::LiveStatus ? $this->getCloudURL() : parent::RelativeLink();
     }
 
     public function getURL()
     {
         $this->createLocalIfNeeded();
-        return $this->CloudStatus == 'Live' ? $this->getCloudURL() : parent::getURL();
+        return $this->CloudStatus == CloudFileExtension::LiveStatus ? $this->getCloudURL() : parent::getURL();
     }
 
     public function getAbsoluteURL()
     {
         $this->createLocalIfNeeded();
-        return $this->CloudStatus == 'Live' ? $this->getCloudURL() : parent::getAbsoluteURL();
+        return $this->CloudStatus == CloudFileExtension::LiveStatus ? $this->getCloudURL() : parent::getAbsoluteURL();
     }
 
     public function getAbsoluteSize()
     {
         $this->createLocalIfNeeded();
-        return $this->CloudStatus == 'Live' ? $this->CloudSize : parent::getAbsoluteSize();
+        return $this->CloudStatus == CloudFileExtension::LiveStatus ? $this->CloudSize : parent::getAbsoluteSize();
     }
 
     public function exists()
@@ -74,7 +74,7 @@ class CloudImage extends Image implements CloudAssetInterface
         if ($dim === 'live') {
             return parent::getDimensions();
         }
-        if ($this->CloudStatus != 'Live') {
+        if ($this->CloudStatus != CloudFileExtension::LiveStatus) {
             return parent::getDimensions($dim);
         }
 
@@ -160,7 +160,7 @@ class CloudImage extends Image implements CloudAssetInterface
                 // If so, we can just send this puppy on
                 // If not, is there a local file that's present and correct?
                 // If not, we need to wipe the meta and anything local and regenerate
-                if ($stored->CloudStatus !== 'Live' && $cached->isLocalMissing()) {
+                if ($stored->CloudStatus !== CloudFileExtension::LiveStatus && $cached->isLocalMissing()) {
                     $stored->delete();
                     $stored = null;
                     if (file_exists($cachePath)) {
@@ -195,7 +195,7 @@ class CloudImage extends Image implements CloudAssetInterface
                     $logger->debug("CloudAssets: generating formatted image at $cachePath");
 
                     // Regenerate the formatted image
-                    if ($this->CloudStatus === 'Live' && $this->isLocalMissing()) {
+                    if ($this->CloudStatus === CloudFileExtension::LiveStatus && $this->isLocalMissing()) {
                         try {
                             $this->downloadFromCloud();
                         } catch (Exception $e) {
