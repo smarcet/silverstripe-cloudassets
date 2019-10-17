@@ -160,7 +160,7 @@ class CloudImage extends Image implements CloudAssetInterface
                 // If so, we can just send this puppy on
                 // If not, is there a local file that's present and correct?
                 // If not, we need to wipe the meta and anything local and regenerate
-                if ($stored->CloudStatus !== CloudFileExtension::LiveStatus && $cached->isLocalMissing()) {
+                if ($stored->CloudStatus !== CloudFileExtension::LiveStatus || $cached->isLocalMissing()) {
                     $stored->delete();
                     $stored = null;
                     if (file_exists($cachePath)) {
