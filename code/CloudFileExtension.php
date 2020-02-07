@@ -132,7 +132,9 @@ class CloudFileExtension extends DataExtension
 
                             $wrapped->setCloudMeta('LastPut', time());
                             $wrapped->CloudStatus = self::LiveStatus;
-                            $wrapped->CloudSize = filesize($this->owner->getFullPath());
+                            if(!$this->owner instanceof CloudFolder) {
+                                $wrapped->CloudSize = filesize($this->owner->getFullPath());
+                            }
                             $wrapped->write();
 
                             $wrapped->convertToPlaceholder();
@@ -182,8 +184,8 @@ class CloudFileExtension extends DataExtension
      */
     public function canBeInCloud()
     {
-        if ($this->owner instanceof Folder) {
-            return false;
+        if ($this->owner instanceof CloudFolder) {
+            return true;
         }
         if (!file_exists($this->owner->getFullPath())) {
             return false;
@@ -351,10 +353,12 @@ class CloudFileExtension extends DataExtension
             return false;
         }
 
-        // we never want to upload an empty file
-        $path = $this->owner->getFullPath();
-        if (!file_exists($path)) {
-            return false;
+        if(!$this->owner instanceof CloudFolder) {
+            // we never want to upload an empty file
+            $path = $this->owner->getFullPath();
+            if (!file_exists($path)) {
+                return false;
+            }
         }
 
         // we always want to upload if it's the first time
@@ -363,10 +367,12 @@ class CloudFileExtension extends DataExtension
             return true;
         }
 
-        // additionally, we want to upload if the file has been changed or replaced
-        $mtime = filemtime($path);
-        if ($mtime > $lastPut) {
-            return true;
+        if(!$this->owner instanceof CloudFolder) {
+            // additionally, we want to upload if the file has been changed or replaced
+            $mtime = filemtime($path);
+            if ($mtime > $lastPut) {
+                return true;
+            }
         }
 
         return false;
