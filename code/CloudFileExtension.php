@@ -132,7 +132,7 @@ class CloudFileExtension extends DataExtension
 
                             $wrapped->setCloudMeta('LastPut', time());
                             $wrapped->CloudStatus = self::LiveStatus;
-                            if(!$this->owner instanceof CloudFolder) {
+                            if(is_file($this->owner->getFullPath())) {
                                 $wrapped->CloudSize = filesize($this->owner->getFullPath());
                             }
                             $wrapped->write();
