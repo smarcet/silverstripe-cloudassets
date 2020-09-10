@@ -304,10 +304,15 @@ class CloudFileExtension extends DataExtension
             // if there was an error and we overwrote the local file with empty or null, it could delete the remote
             // file as well. Better to err on the side of not writing locally when we should than that.
             if (!empty($contents)) {
-                file_put_contents($path, $contents);
-
-                $this->owner->setCloudMeta('LastPut', time());
-                $this->owner->write();
+                try {
+                    file_put_contents($path, $contents);
+                    $this->owner->setCloudMeta('LastPut', time());
+                    $this->owner->write();
+                }
+                catch (Exception $ex){
+                    SS_Log::log("CloudAssets: downloading $path from cloud (size=" . strlen($contents) . ") failed", SS_Log::ERR);
+                    SS_Log::log($ex->getMessage() , SS_Log::ERR);
+                }
             }
 
         }
